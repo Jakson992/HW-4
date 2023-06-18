@@ -11,6 +11,12 @@ from datetime import datetime
 BASE_DIR = pathlib.Path()
 STORAGE_DIR = BASE_DIR / 'storage'
 
+data_file = STORAGE_DIR / 'data.json'
+if not data_file.exists():
+    # Створюємо новий файл зі списком
+    with open(data_file, 'w', encoding='utf-8') as f:
+        json.dump([], f)
+
 html = """"
 <!doctype html>
 <html lang="en">
@@ -33,12 +39,24 @@ html = """"
 class HTTPHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
-
         body = self.rfile.read(int(self.headers['Content-Length']))
         body = urllib.parse.unquote_plus(body.decode())
         payload = {key: value for key, value in [el.split('=') for el in body.split('&')]}
-        with open(BASE_DIR.joinpath('storage/data.json'), 'w', encoding='utf-8') as fd:
-            json.dump(payload, fd, ensure_ascii=False)
+
+        data = []
+        # Завантажуємо вміст JSON-файлу
+        with open(data_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+        entry = {timestamp: payload}
+
+        # Додаємо новий запис до списку
+        data.append(entry)
+
+        # Перезаписуємо JSON-файл з новим списком
+        with open(data_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
 
         self.send_response(302)
         self.send_header('Location', '/')
