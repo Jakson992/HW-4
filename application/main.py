@@ -1,12 +1,12 @@
 import pathlib
 import urllib.parse
+from urllib.parse import parse_qs
 import mimetypes
 import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 import socket
 from datetime import datetime
-
 
 BASE_DIR = pathlib.Path()
 STORAGE_DIR = BASE_DIR / 'storage'
@@ -16,6 +16,8 @@ if not data_file.exists():
     # Створюємо новий файл зі списком
     with open(data_file, 'w', encoding='utf-8') as f:
         json.dump([], f)
+
+data_list = []
 
 html = """"
 <!doctype html>
@@ -39,28 +41,19 @@ html = """"
 class HTTPHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
-        body = self.rfile.read(int(self.headers['Content-Length']))
-        body = urllib.parse.unquote_plus(body.decode())
-        payload = {key: value for key, value in [el.split('=') for el in body.split('&')]}
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length).decode('utf-8')
+        parsed_data = parse_qs(post_data)
+        entry = {}
+        for key, value in parsed_data.items():
+            entry[key] = value[0]
 
-        data = []
-        # Завантажуємо вміст JSON-файлу
-        with open(data_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        data_list.append(entry)  # Исправленная строка
 
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-        entry = {timestamp: payload}
-
-        # Додаємо новий запис до списку
-        data.append(entry)
-
-        # Перезаписуємо JSON-файл з новим списком
-        with open(data_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False)
-
-        self.send_response(302)
-        self.send_header('Location', '/')
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
         self.end_headers()
+        self.wfile.write(bytes('Data received and stored successfully!', 'utf-8'))
 
     def do_GET(self):
         route = urllib.parse.urlparse(self.path)
@@ -109,7 +102,6 @@ def run(server=HTTPServer, handler=HTTPHandler):
         http_server.server_close()
 
 
-
 class SocketServer(Thread):
     def __init__(self):
         super().__init__()
@@ -131,6 +123,7 @@ class SocketServer(Thread):
                 except json.JSONDecodeError:
                     print('Invalid JSON data received')
 
+
 def run(server=HTTPServer, handler=HTTPHandler):
     http_address = ('', 3000)
     http_server = server(http_address, handler)
@@ -139,11 +132,10 @@ def run(server=HTTPServer, handler=HTTPHandler):
     socket_server.start()
 
     try:
-        http_server.serve_forever()
-    except KeyboardInterrupt:
+        http_server.serve_forever()    except KeyboardInterrupt:
         http_server.server_close()
         socket_server.join()
 
+
 if __name__ == '__main__':
     run()
-
